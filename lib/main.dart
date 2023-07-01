@@ -1,67 +1,86 @@
+import 'package:divine/services/user_service.dart';
+import 'package:divine/utilities/config.dart';
+import 'package:divine/utilities/constants.dart';
+import 'package:divine/utilities/providers.dart';
+import 'package:divine/view_models/theme/theme_view_model.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'auth/login.dart';
+import 'event_handlers/app_life_cycle_event_handler.dart';
 
-void main() {
+void main() async {
+  // Initiliaze the app depending on the platform.
+  WidgetsFlutterBinding.ensureInitialized();
+  await Config.initFirebase();
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Divine',
-      theme: ThemeData(
-        primarySwatch: Colors.amber,
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Listening to app lifecyle event changes.
+    WidgetsBinding.instance.addObserver(
+      AppLifeCycleEventHandler(
+        // The user exited the app.
+        detachedCallBack: () => UserService().setUserStatus(false),
+        // The user opened or reopened the app.
+        resumeCallBack: () => UserService().setUserStatus(true),
       ),
-      home: const MyHomePage(title: 'Divine'),
     );
   }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
+    // Making use of MultiProvder to avoid writing boilerplate code.
+    // https://pub.dev/documentation/provider/latest/provider/MultiProvider-class.html
+    return MultiProvider(
+      providers: providers,
+      child: Consumer<ThemeProvider>(
+        builder: (context, ThemeProvider themeProvider, Widget? child) {
+          return MaterialApp(
+            // Set app's name.
+            title: Constants.appName,
+            // Don't show the debug banner.
+            debugShowCheckedModeBanner: false,
+            // Set app's theme
+            theme: themeData(
+              themeProvider.dark ? Constants.darkTheme : Constants.lightTheme,
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            // Check whether user is logged in or not, redirect to LoginPage if not, MainPage otherwise.
+            // https://api.flutter.dev/flutter/widgets/StreamBuilder-class.html
+            home: StreamBuilder(
+              stream: FirebaseAuth.instance.authStateChanges(),
+              builder: ((BuildContext context, snapshot) {
+                if (snapshot.hasData) {
+                  // Goto MainPage(user is logged in.)
+                  return const LoginPage();
+                } else {
+                  // Goto LoginPage(user is not logged in.)
+                  return const LoginPage();
+                }
+              }),
             ),
-          ],
-        ),
+          );
+        },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+    );
+  }
+
+  // https://fonts.google.com/specimen/Nunito+Sans
+  ThemeData themeData(ThemeData theme) {
+    return theme.copyWith(
+      textTheme: GoogleFonts.nunitoSansTextTheme(
+        theme.textTheme,
       ),
     );
   }
